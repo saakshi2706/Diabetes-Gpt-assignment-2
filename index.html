@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diabetes Prediction</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div id="container">
+        <h1>DiabetesGPT</h1>
+        <div id="chat">
+            <div id="bot-response"></div>
+            <div id="user-input-container">
+                <input type="text" id="user-input" placeholder="Enter your answer" required>
+                <button id="send-button">&#8594;</button>
+            </div>
+            <button id="restart-button" style="display: none;">Restart</button>
+        </div>
+    </div>
+
+    <script>
+        let currentInputIndex = 0;
+
+        function askNextQuestion() {
+            fetch('/ask', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message) {
+                        document.getElementById('bot-response').innerText = data.message;
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function submitInput() {
+            const inputValue = document.getElementById('user-input').value.trim();
+
+            if (!inputValue) {
+                alert("Please enter a value before submitting.");
+                return;
+            }
+
+            const featureName = ["pregnancies", "glucose", "blood_pressure", "skin_thickness", "insulin", "bmi", "diabetes_pedigree_function", "age"][currentInputIndex];
+
+            // Validate the input limits
+            const limits = {
+                pregnancies: [0, 17],
+                glucose: [0, 199],
+                blood_pressure: [0, 122],
+                skin_thickness: [0, 99],
+                insulin: [0, 846],
+                bmi: [0, 67],
+                diabetes_pedigree_function: [0.078, 2.42],
+                age: [21, 81]
+            };
+
+            const [min, max] = limits[featureName];
+            const value = parseFloat(inputValue);
+
+            if (value < min || value > max) {
+                alert(`Please enter a value between ${min} and ${max} for ${featureName.replace(/_/g, ' ')}.`);
+                return;
+            }
+
+            fetch('/input', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ feature: featureName, value: inputValue })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message) {
+                    document.getElementById('bot-response').innerText = data.message;
+                }
+                if (currentInputIndex < 7) { // Assuming 8 questions
+                    currentInputIndex++;
+                    document.getElementById('user-input').value = ''; // Clear input field
+                    askNextQuestion();
+                } else {
+                    // Optionally trigger prediction here
+                    predict();
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function predict() {
+            fetch('/predict', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message) {
+                    document.getElementById('bot-response').innerText = `${data.message} (Probability: ${data.probability})`;
+                }
+                // Show restart button after prediction
+                document.getElementById('restart-button').style.display = 'block';
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function restartSession() {
+            fetch('/restart', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message) {
+                    document.getElementById('bot-response').innerText = data.message;
+                }
+                // Reset state
+                currentInputIndex = 0;
+                document.getElementById('user-input').value = ''; // Clear input field
+                document.getElementById('restart-button').style.display = 'none';
+                askNextQuestion();
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        document.getElementById('send-button').addEventListener('click', submitInput);
+        document.getElementById('restart-button').addEventListener('click', restartSession);
+
+        // Start asking questions
+        askNextQuestion();
+    </script>
+</body>
+</html>
